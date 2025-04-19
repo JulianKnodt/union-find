@@ -39,9 +39,8 @@ impl UnionFind {
         dst
     }
     pub fn set(&mut self, v: usize, to: usize) {
-        if v >= self.ptrs.len() || to >= self.ptrs.len() {
-          return;
-        }
+        assert!(v <= self.ptrs.len());
+        assert!(to <= self.ptrs.len());
         let root_to = self.get_compress(to);
         let root_v = self.get_compress(v);
         if root_v != root_to {
@@ -61,6 +60,10 @@ impl UnionFind {
                 self.set(i, terminal);
             }
         }
+    }
+    pub fn extend_one(&mut self) {
+      let l = self.ptrs.len();
+      self.ptrs.push(Cell::new(l));
     }
     #[inline]
     pub fn capacity(&self) -> usize {
