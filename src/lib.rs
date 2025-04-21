@@ -21,6 +21,18 @@ impl<T: Copy + Eq> UnionFind<T> {
     }
 }
 
+/// A subset of another UnionFind. Note that all values passed should still use the indices
+/// from the original.
+#[derive(Debug, PartialEq, Eq)]
+pub struct BorrowedUnionFind<'a, T: Copy + Eq = usize> {
+    /// Slice of cells of original union find
+    ptrs: &'a mut [Cell<T>],
+    /// mutable reference to original len
+    len: &'a mut usize,
+    /// The range within the original UnionFind
+    r: Range<usize>,
+}
+
 impl UnionFind<usize> {
     #[inline]
     pub fn new(size: usize) -> Self {
@@ -96,10 +108,10 @@ impl UnionFind<u32> {
         if v >= self.ptrs.len() {
             return v;
         }
-        while let n = unsafe { self.ptrs.get_unchecked(v).get() }
-            && n as usize != v
+        while let n = unsafe { self.ptrs.get_unchecked(v).get() } as usize
+            && n != v
         {
-            v = n as usize;
+            v = n;
         }
         v
     }
@@ -151,7 +163,7 @@ impl UnionFind<u32> {
     }
     /// Extract a subset of this union-find, assuming that it only maps within this range to
     /// itself.
-    pub fn subset(&self, r: Range<usize>) -> Self {
+    pub fn subset_clone(&self, r: Range<usize>) -> Self {
         let offset = r.start;
         let len = r.end - offset;
         let ptrs = vec![Cell::new(0); len];
@@ -164,19 +176,95 @@ impl UnionFind<u32> {
         }
         Self { ptrs, len }
     }
+
+    pub fn subset<'a>(&'a mut self, r: Range<usize>) -> BorrowedUnionFind<'a, u32> {
+        let ptrs = &mut self.ptrs[r.clone()];
+        let len = &mut self.len;
+        BorrowedUnionFind { ptrs, len, r }
+    }
 }
+
+impl BorrowedUnionFind<'_, u32> {
+    #[inline]
+    pub fn get(&self, v: usize) -> usize {
+        let mut v = v - self.r.start;
+        if v >= self.ptrs.len() {
+            return v;
+        }
+        while let n = unsafe { self.ptrs.get_unchecked(v).get() } as usize
+            && n != v
+        {
+            v = n;
+        }
+        v
+    }
+    pub fn get_compress(&self, v: usize) -> usize {
+        let v = v - self.r.start;
+        if v >= self.ptrs.len() {
+            return v;
+        }
+        let dst = self.get(v);
+        self.ptrs[v].set(dst as u32);
+        dst
+    }
+    pub fn set(&mut self, v: usize, to: usize) {
+        let v = v - self.r.start;
+        let to = to - self.r.start;
+        assert!(v <= self.ptrs.len());
+        assert!(to <= self.ptrs.len());
+        let root_to = self.get_compress(to);
+        let root_v = self.get_compress(v);
+        if root_v != root_to {
+            unsafe { self.ptrs.get_unchecked(root_v) }.set(root_to as u32);
+            *self.len -= 1;
+        }
+    }
+    /// Checks if a vertex is itself the root of a tree
+    pub fn is_root(&self, v: usize) -> bool {
+        let v = v - self.r.start;
+        self.ptrs
+            .get(v)
+            .map(|p| p.get() as usize == v)
+            .unwrap_or(false)
+    }
+}
+
+pub trait UnionFindOp {
+    fn find(&self, v: usize) -> usize;
+    fn union(&mut self, v: usize, to: usize);
+    fn is_root(&self, v: usize) -> bool {
+        self.find(v) == v
+    }
+}
+
+macro_rules! impl_basic {
+    ($t: ty) => {
+        impl UnionFindOp for $t {
+            fn find(&self, v: usize) -> usize {
+                self.get(v)
+            }
+            fn union(&mut self, v: usize, to: usize) {
+                self.set(v, to)
+            }
+        }
+    };
+}
+
+impl_basic!(UnionFind<usize>);
+impl_basic!(UnionFind<u32>);
+impl_basic!(BorrowedUnionFind<'_, u32>);
 
 #[test]
 fn test_subset() {
-  let mut v = UnionFind::new_u32(32);
-  let s = v.subset(16..32);
-  assert_eq!(s.curr_len(), 16);
-  assert_eq!(s.capacity(), 16);
+    let mut v = UnionFind::new_u32(32);
+    let s = v.subset_clone(16..32);
+    assert_eq!(s.curr_len(), 16);
+    assert_eq!(s.capacity(), 16);
 
-  v.set(18, 19);
-  let s = v.subset(16..32);
-  assert_eq!(s.curr_len(), 15);
-  assert_eq!(s.capacity(), 16);
-  assert!(!s.is_root(2));
-  assert_eq!(s.get(2), 3);
+    v.set(18, 19);
+    let s = v.subset_clone(16..32);
+    assert_eq!(s.curr_len(), 15);
+    assert_eq!(s.capacity(), 16);
+    assert!(!s.is_root(2));
+    assert_eq!(s.get(2), 3);
 }
