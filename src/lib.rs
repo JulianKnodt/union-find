@@ -21,7 +21,7 @@ impl UnionFind {
     #[inline]
     pub fn get(&self, mut v: usize) -> usize {
         if v >= self.ptrs.len() {
-          return v;
+            return v;
         }
         while let n = unsafe { self.ptrs.get_unchecked(v).get() }
             && n != v
@@ -32,7 +32,7 @@ impl UnionFind {
     }
     pub fn get_compress(&self, v: usize) -> usize {
         if v >= self.ptrs.len() {
-          return v;
+            return v;
         }
         let dst = self.get(v);
         self.ptrs[v].set(dst);
@@ -61,9 +61,11 @@ impl UnionFind {
             }
         }
     }
-    pub fn extend_one(&mut self) {
-      let l = self.ptrs.len();
-      self.ptrs.push(Cell::new(l));
+    pub fn extend_by(&mut self, n: usize) {
+        let l = self.ptrs.len();
+        for i in 0..n {
+            self.ptrs.push(Cell::new(l + i));
+        }
     }
     #[inline]
     pub fn capacity(&self) -> usize {
