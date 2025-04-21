@@ -1,6 +1,7 @@
 #![feature(let_chains)]
 
-use std::cell::Cell;
+use core::cell::Cell;
+use core::ops::Range;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnionFind<T: Copy + Eq = usize> {
@@ -138,10 +139,44 @@ impl UnionFind<u32> {
     }
     pub fn extend_by(&mut self, n: usize) {
         let l = self.ptrs.len();
-        assert!((l + n) < u32::MAX as usize, "UnionFind<u32> Will overflow with {}", l + n);
+        assert!(
+            (l + n) < u32::MAX as usize,
+            "UnionFind<u32> Will overflow with {}",
+            l + n
+        );
         for i in 0..n {
             let s = (l + i) as u32;
             self.ptrs.push(Cell::new(s));
         }
     }
+    /// Extract a subset of this union-find, assuming that it only maps within this range to
+    /// itself.
+    pub fn subset(&self, r: Range<usize>) -> Self {
+        let offset = r.start;
+        let len = r.end - offset;
+        let ptrs = vec![Cell::new(0); len];
+        let mut len = 0;
+        for (new_i, old_i) in r.clone().enumerate() {
+            let prev_v = self.ptrs[old_i].get();
+            len += (prev_v as usize == old_i) as usize;
+            assert!(r.contains(&(prev_v as usize)));
+            ptrs[new_i].set(prev_v - offset as u32);
+        }
+        Self { ptrs, len }
+    }
+}
+
+#[test]
+fn test_subset() {
+  let mut v = UnionFind::new_u32(32);
+  let s = v.subset(16..32);
+  assert_eq!(s.curr_len(), 16);
+  assert_eq!(s.capacity(), 16);
+
+  v.set(18, 19);
+  let s = v.subset(16..32);
+  assert_eq!(s.curr_len(), 15);
+  assert_eq!(s.capacity(), 16);
+  assert!(!s.is_root(2));
+  assert_eq!(s.get(2), 3);
 }
