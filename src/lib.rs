@@ -9,6 +9,17 @@ pub struct UnionFind<T: Copy + Eq = usize> {
     len: usize,
 }
 
+impl<T: Copy + Eq> UnionFind<T> {
+    #[inline]
+    pub fn capacity(&self) -> usize {
+        self.ptrs.len()
+    }
+    #[inline]
+    pub fn curr_len(&self) -> usize {
+        self.len
+    }
+}
+
 impl UnionFind<usize> {
     #[inline]
     pub fn new(size: usize) -> Self {
@@ -66,14 +77,6 @@ impl UnionFind<usize> {
         for i in 0..n {
             self.ptrs.push(Cell::new(l + i));
         }
-    }
-    #[inline]
-    pub fn capacity(&self) -> usize {
-        self.ptrs.len()
-    }
-    #[inline]
-    pub fn curr_len(&self) -> usize {
-        self.len
     }
 }
 
@@ -135,18 +138,10 @@ impl UnionFind<u32> {
     }
     pub fn extend_by(&mut self, n: usize) {
         let l = self.ptrs.len();
-        assert!((l + n) < u32::MAX as usize, "Will overflow");
+        assert!((l + n) < u32::MAX as usize, "UnionFind<u32> Will overflow with {}", l + n);
         for i in 0..n {
             let s = (l + i) as u32;
             self.ptrs.push(Cell::new(s));
         }
-    }
-    #[inline]
-    pub fn capacity(&self) -> usize {
-        self.ptrs.len()
-    }
-    #[inline]
-    pub fn curr_len(&self) -> usize {
-        self.len
     }
 }
