@@ -21,8 +21,8 @@ impl<T: Copy + Eq> UnionFind<T> {
     }
 }
 
-/// A subset of another UnionFind. Note that all values passed should still use the indices
-/// from the original.
+/// A subset of another UnionFind. Note that all values passed should use values starting from
+/// 0, not those values from the original.
 #[derive(Debug, PartialEq, Eq)]
 pub struct BorrowedUnionFind<'a, T: Copy + Eq = usize> {
     /// Slice of cells of original union find
@@ -57,9 +57,6 @@ impl UnionFind<usize> {
     }
     #[inline]
     pub fn get(&self, mut v: usize) -> usize {
-        if v >= self.ptrs.len() {
-            return v;
-        }
         while let n = unsafe { self.ptrs.get_unchecked(v).get() }
             && n != v
         {
@@ -68,11 +65,8 @@ impl UnionFind<usize> {
         v
     }
     pub fn get_compress(&self, v: usize) -> usize {
-        if v >= self.ptrs.len() {
-            return v;
-        }
         let dst = self.get(v);
-        self.ptrs[v].set(dst);
+        unsafe { self.ptrs.get_unchecked(v) }.set(dst);
         dst
     }
     pub fn set(&mut self, v: usize, to: usize) {
@@ -118,9 +112,6 @@ impl UnionFind<u32> {
     }
     #[inline]
     pub fn get(&self, mut v: usize) -> usize {
-        if v >= self.ptrs.len() {
-            return v;
-        }
         while let n = unsafe { self.ptrs.get_unchecked(v).get() } as usize
             && n != v
         {
@@ -129,16 +120,13 @@ impl UnionFind<u32> {
         v
     }
     pub fn get_compress(&self, v: usize) -> usize {
-        if v >= self.ptrs.len() {
-            return v;
-        }
         let dst = self.get(v);
-        self.ptrs[v].set(dst as u32);
+        unsafe { self.ptrs.get_unchecked(v) }.set(dst as u32);
         dst
     }
     pub fn set(&mut self, v: usize, to: usize) {
-        assert!(v <= self.ptrs.len());
-        assert!(to <= self.ptrs.len());
+        debug_assert!(v <= self.ptrs.len());
+        debug_assert!(to <= self.ptrs.len());
         let root_to = self.get_compress(to);
         let root_v = self.get_compress(v);
         if root_v != root_to {
@@ -212,36 +200,34 @@ impl UnionFind<u32> {
 
 impl BorrowedUnionFind<'_, u32> {
     #[inline]
-    pub fn get(&self, v: usize) -> usize {
-        assert!(self.r.contains(&v));
-        let mut v = v - self.r.start;
+    pub fn get(&self, mut v: usize) -> usize {
+        assert!(self.r.contains(&(v + self.r.start)), "{v:?} {:?}", self.r);
         while let n = unsafe { self.ptrs.get_unchecked(v).get() } as usize - self.r.start
             && n != v
         {
             v = n;
         }
-        v + self.r.start
+        v
     }
     pub fn get_compress(&self, v: usize) -> usize {
         let dst = self.get(v);
-        self.ptrs[v - self.r.start].set(dst as u32);
+        self.ptrs[v].set((dst + self.r.start) as u32);
         dst
     }
     pub fn set(&mut self, v: usize, to: usize) {
-        assert!(self.r.contains(&v));
-        assert!(self.r.contains(&to));
+        assert!(self.r.contains(&(v + self.r.start)));
+        assert!(self.r.contains(&(to + self.r.start)));
 
         let root_to = self.get_compress(to);
         let root_v = self.get_compress(v);
         if root_v != root_to {
-            unsafe { self.ptrs.get_unchecked(root_v - self.r.start) }.set(root_to as u32);
+            unsafe { self.ptrs.get_unchecked(root_v) }.set((root_to + self.r.start) as u32);
             *self.len -= 1;
             self.own_len -= 1;
         }
     }
     /// Checks if a vertex is itself the root of a tree
     pub fn is_root(&self, v: usize) -> bool {
-        let v = v - self.r.start;
         self.ptrs
             .get(v)
             .map(|p| p.get() as usize == v)
@@ -321,11 +307,11 @@ fn test_subset() {
     assert_eq!(s.capacity(), 16);
     assert_eq!(s.curr_len(), 16);
 
-    assert_eq!(s.get(17), 17);
-    assert_eq!(s.get_compress(17), 17);
-    s.set(17, 18);
+    assert_eq!(s.get(1), 1);
+    assert_eq!(s.get_compress(1), 1);
+    s.set(1, 2);
     assert_eq!(s.curr_len(), 15);
-    assert_eq!(s.get(17), 18);
+    assert_eq!(s.get(1), 2);
 
     assert_eq!(v.curr_len(), 31);
 
@@ -333,6 +319,6 @@ fn test_subset() {
     let s = v.subset(16..32);
     assert_eq!(s.curr_len(), 14);
     assert_eq!(s.capacity(), 16);
-    assert!(!s.is_root(20));
-    assert_eq!(s.get(20), 21);
+    assert!(!s.is_root(4));
+    assert_eq!(s.get(4), 5);
 }
