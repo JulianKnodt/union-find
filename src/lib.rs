@@ -97,6 +97,7 @@ impl UnionFind<usize> {
         for i in 0..n {
             self.ptrs.push(Cell::new(l + i));
         }
+        self.len += n;
     }
 }
 
@@ -161,6 +162,7 @@ impl UnionFind<u32> {
             let s = (l + i) as u32;
             self.ptrs.push(Cell::new(s));
         }
+        self.len += n;
     }
     /// Extract a subset of this union-find, assuming that it only maps within this range to
     /// itself.
