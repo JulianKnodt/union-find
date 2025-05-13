@@ -1,5 +1,8 @@
 #![feature(let_chains)]
 
+mod atomic;
+pub use atomic::UnionFind as AtomicUnionFind;
+
 use core::cell::Cell;
 use core::ops::Range;
 
@@ -8,6 +11,16 @@ pub struct UnionFind<T: Copy + Eq = usize> {
     ptrs: Vec<Cell<T>>,
 
     len: usize,
+}
+
+pub trait UnionFindOp {
+    fn find(&self, v: usize) -> usize;
+    fn union(&mut self, v: usize, to: usize);
+    fn is_root(&self, v: usize) -> bool {
+        self.find(v) == v
+    }
+    fn len(&self) -> usize;
+    fn capacity(&self) -> usize;
 }
 
 impl<T: Copy + Eq> UnionFind<T> {
@@ -235,16 +248,6 @@ impl BorrowedUnionFind<'_, u32> {
             .map(|p| p.get() as usize == v)
             .unwrap_or(false)
     }
-}
-
-pub trait UnionFindOp {
-    fn find(&self, v: usize) -> usize;
-    fn union(&mut self, v: usize, to: usize);
-    fn is_root(&self, v: usize) -> bool {
-        self.find(v) == v
-    }
-    fn len(&self) -> usize;
-    fn capacity(&self) -> usize;
 }
 
 macro_rules! impl_basic {
