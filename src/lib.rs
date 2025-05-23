@@ -34,6 +34,18 @@ impl<T: Copy + Eq> UnionFind<T> {
     }
 }
 
+#[cfg(feature = "unchecked")]
+macro_rules! idx {
+    ($s: expr, $vi: expr) => {
+        unsafe { $s.get_unchecked($vi) }
+    };
+}
+
+#[cfg(not(feature = "unchecked"))]
+macro_rules! idx {
+    ($s: expr, $vi: expr) => {{ &$s[$vi] }};
+}
+
 /// A subset of another UnionFind. Note that all values passed should use values starting from
 /// 0, not those values from the original.
 #[derive(Debug, PartialEq, Eq)]
@@ -70,7 +82,7 @@ impl UnionFind<usize> {
     }
     #[inline]
     pub fn get(&self, mut v: usize) -> usize {
-        while let n = unsafe { self.ptrs.get_unchecked(v).get() }
+        while let n = idx!(self.ptrs, v).get()
             && n != v
         {
             v = n;
@@ -79,7 +91,7 @@ impl UnionFind<usize> {
     }
     pub fn get_compress(&self, v: usize) -> usize {
         let dst = self.get(v);
-        unsafe { self.ptrs.get_unchecked(v) }.set(dst);
+        idx!(self.ptrs, v).set(dst);
         dst
     }
     pub fn set(&mut self, v: usize, to: usize) {
@@ -88,7 +100,7 @@ impl UnionFind<usize> {
         let root_to = self.get_compress(to);
         let root_v = self.get_compress(v);
         if root_v != root_to {
-            unsafe { self.ptrs.get_unchecked(root_v) }.set(root_to);
+            idx!(self.ptrs, root_v).set(root_to);
             self.len -= 1;
         }
     }
@@ -126,7 +138,7 @@ impl UnionFind<u32> {
     }
     #[inline]
     pub fn get(&self, mut v: usize) -> usize {
-        while let n = unsafe { self.ptrs.get_unchecked(v).get() } as usize
+        while let n = idx!(self.ptrs, v).get() as usize
             && n != v
         {
             v = n;
@@ -135,7 +147,7 @@ impl UnionFind<u32> {
     }
     pub fn get_compress(&self, v: usize) -> usize {
         let dst = self.get(v);
-        unsafe { self.ptrs.get_unchecked(v) }.set(dst as u32);
+        idx!(self.ptrs, v).set(dst as u32);
         dst
     }
     pub fn set(&mut self, v: usize, to: usize) {
@@ -143,10 +155,11 @@ impl UnionFind<u32> {
         debug_assert!(to <= self.ptrs.len());
         let root_to = self.get_compress(to);
         let root_v = self.get_compress(v);
-        if root_v != root_to {
-            unsafe { self.ptrs.get_unchecked(root_v) }.set(root_to as u32);
-            self.len -= 1;
+        if root_v == root_to {
+            return;
         }
+        idx!(self.ptrs, root_v).set(root_to as u32);
+        self.len -= 1;
     }
     /// Checks if a vertex is itself the root of a tree
     pub fn is_root(&self, v: usize) -> bool {
@@ -216,8 +229,8 @@ impl UnionFind<u32> {
 impl BorrowedUnionFind<'_, u32> {
     #[inline]
     pub fn get(&self, mut v: usize) -> usize {
-        assert!(self.r.contains(&(v + self.r.start)), "{v:?} {:?}", self.r);
-        while let n = unsafe { self.ptrs.get_unchecked(v).get() } as usize - self.r.start
+        debug_assert!(self.r.contains(&(v + self.r.start)), "{v:?} {:?}", self.r);
+        while let n = idx!(self.ptrs, v).get() as usize - self.r.start
             && n != v
         {
             v = n;
@@ -226,20 +239,21 @@ impl BorrowedUnionFind<'_, u32> {
     }
     pub fn get_compress(&self, v: usize) -> usize {
         let dst = self.get(v);
-        self.ptrs[v].set((dst + self.r.start) as u32);
+        unsafe { self.ptrs.get_unchecked(v) }.set((dst + self.r.start) as u32);
         dst
     }
     pub fn set(&mut self, v: usize, to: usize) {
-        assert!(self.r.contains(&(v + self.r.start)));
-        assert!(self.r.contains(&(to + self.r.start)));
+        debug_assert!(self.r.contains(&(v + self.r.start)));
+        debug_assert!(self.r.contains(&(to + self.r.start)));
 
         let root_to = self.get_compress(to);
         let root_v = self.get_compress(v);
-        if root_v != root_to {
-            unsafe { self.ptrs.get_unchecked(root_v) }.set((root_to + self.r.start) as u32);
-            *self.len -= 1;
-            self.own_len -= 1;
+        if root_v == root_to {
+            return;
         }
+        idx!(self.ptrs, root_v).set((root_to + self.r.start) as u32);
+        *self.len -= 1;
+        self.own_len -= 1;
     }
     /// Checks if a vertex is itself the root of a tree
     pub fn is_root(&self, v: usize) -> bool {
@@ -253,15 +267,19 @@ impl BorrowedUnionFind<'_, u32> {
 macro_rules! impl_basic {
     ($t: ty) => {
         impl UnionFindOp for $t {
+            #[inline]
             fn find(&self, v: usize) -> usize {
                 self.get_compress(v)
             }
+            #[inline]
             fn union(&mut self, v: usize, to: usize) {
                 self.set(v, to)
             }
+            #[inline]
             fn len(&self) -> usize {
                 self.len
             }
+            #[inline]
             fn capacity(&self) -> usize {
                 self.ptrs.len()
             }
@@ -269,15 +287,19 @@ macro_rules! impl_basic {
     };
     (BORROWED $t: ty) => {
         impl UnionFindOp for $t {
+            #[inline]
             fn find(&self, v: usize) -> usize {
                 self.get_compress(v)
             }
+            #[inline]
             fn union(&mut self, v: usize, to: usize) {
                 self.set(v, to)
             }
+            #[inline]
             fn len(&self) -> usize {
                 self.own_len
             }
+            #[inline]
             fn capacity(&self) -> usize {
                 self.ptrs.len()
             }
