@@ -1,5 +1,3 @@
-#![feature(let_chains)]
-
 mod atomic;
 pub use atomic::UnionFind as AtomicUnionFind;
 
